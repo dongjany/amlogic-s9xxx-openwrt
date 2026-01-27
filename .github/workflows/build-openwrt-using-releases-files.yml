@@ -323,7 +323,7 @@ jobs:
         working-directory: /builder
         if: ${{ steps.init.outputs.status == 'success' && !cancelled() }}
         run: |
-          # Set up compilation source code
+          # Set up compilation source code（保留原始逻辑，不改动）
           if [[ "${{ inputs.source_branch }}" =~ ^openwrt ]]; then
               REPO_URL="https://github.com/openwrt/openwrt"
           elif [[ "${{ inputs.source_branch }}" =~ ^lede ]]; then
@@ -338,43 +338,38 @@ jobs:
           REPO_NAME="${source_branch_input%_*}"
           REPO_BRANCH="${source_branch_input##*_}"
 
+          # 保留原始目录创建、软链接逻辑（确保后续步骤兼容）
           armsr_tarfile_path="openwrt/output"
           [[ -d "${armsr_tarfile_path}" ]] || mkdir -p ${armsr_tarfile_path}
           ln -sf /builder/openwrt ${{ github.workspace }}/openwrt
           ln -sf /builder/openwrt /home/runner/work/_actions/ophub/amlogic-s9xxx-openwrt/main/openwrt
 
-          # Get name (file name) and url (API asset URL)
-          latest_version=$(curl -s \
-              -H "Accept: application/vnd.github+json" \
-              -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-              https://api.github.com/repos/${{ github.repository }}/releases?per_page=20 | \
-              jq -r --arg RTK "OpenWrt_${{ inputs.source_branch }}_" \
-              --arg BOARD "-rootfs.tar.gz" \
-              '[.[] | select(.tag_name | contains($RTK))] |
-              map(.assets[] | select(.name | endswith($BOARD))) |
-              sort_by(.updated_at) |
-              reverse |
-              .[0] |
-              {data: .updated_at, url: .url, name: .name}')
+          # ======================================
+          # 替换：下载远程 rootfs.tar.gz 文件（删除原 Releases API 逻辑）
+          # ======================================
+          REMOTE_ROOTFS_URL="https://dl.openwrt.ai/releases/24.10/targets/armsr/armv8/kwrt-12.05.2025-armsr-armv8-generic-rootfs.tar.gz"
+          openwrt_filename="kwrt-12.05.2025-armsr-armv8-generic-rootfs.tar.gz"
 
-          [[ -z "${latest_version}" || "${latest_version}" == "null" ]] && {
-              echo "Invalid OpenWrt rootfs download address."
-              exit 1
-          }
-
-          # Get URL and filename separately
-          latest_url="$(echo ${latest_version} | jq -r '.url')"
-          openwrt_filename="$(echo ${latest_version} | jq -r '.name')"
-
-          # Download using API method (add octet-stream header)
-          echo "Downloading: ${openwrt_filename}"
-          curl -fsSL \
-               -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-               -H "Accept: application/octet-stream" \
-               "${latest_url}" \
+          # 下载远程文件（带重试机制，提高成功率）
+          echo "Starting download: ${openwrt_filename}"
+          echo "Download source: ${REMOTE_ROOTFS_URL}"
+          curl -fsSL --retry 3 --retry-delay 5 \
+               "${REMOTE_ROOTFS_URL}" \
                -o "${armsr_tarfile_path}/${openwrt_filename}"
-          [[ "${?}" -ne "0" ]] && echo "Download failed." && exit 1
+          
+          # 验证下载结果
+          if [[ "${?}" -ne "0" ]]; then
+              echo "Error: Download failed. Please check the remote URL is valid."
+              exit 1
+          fi
+          echo "Success: Download completed! File saved to ${armsr_tarfile_path}/${openwrt_filename}"
 
+          # 可选：查看文件信息，便于排查问题
+          ls -lh "${armsr_tarfile_path}/${openwrt_filename}"
+
+          # ======================================
+          # 保留原始环境变量设置逻辑（确保后续打包/上传步骤兼容）
+          # ======================================
           echo "build_tag=OpenWrt_${{ inputs.source_branch }}_${{ inputs.openwrt_storage }}_$(date +"%Y.%m")" >> ${GITHUB_ENV}
           df -hT ${PWD}
           echo "REPO_URL=${REPO_URL}" >> ${GITHUB_ENV}
