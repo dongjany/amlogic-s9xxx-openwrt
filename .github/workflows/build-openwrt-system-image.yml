@@ -21,7 +21,7 @@ on:
       openwrt_board:
         description: "Select device board"
         required: false
-        default: "all"
+        default: "s905d"
         type: choice
         options:
           - all
@@ -205,7 +205,7 @@ on:
       openwrt_kernel:
         description: "Select kernel version"
         required: false
-        default: "6.1.y_6.12.y"
+        default: "6.12.66"
         type: choice
         options:
           - 5.10.y
@@ -213,6 +213,7 @@ on:
           - 6.1.y
           - 6.6.y
           - 6.12.y
+          - 6.12.66
           - 5.10.y_5.15.y
           - 5.15.y_6.1.y
           - 6.1.y_6.12.y
@@ -221,7 +222,7 @@ on:
       auto_kernel:
         description: "Auto use the latest kernel"
         required: false
-        default: true
+        default: false
         type: boolean
       kernel_repo:
         description: "Set the kernel repository"
@@ -242,7 +243,7 @@ on:
       openwrt_ip:
         description: "Set OpenWrt default IP address."
         required: false
-        default: "192.168.1.1"
+        default: "192.168.2.15"
       use_ccache:
         description: "Auto use ccache."
         required: false
